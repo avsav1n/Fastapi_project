@@ -7,6 +7,4 @@
 !alembic.ini
 !requirements.txt
 !docker-entrypoint.sh
-!Dockerfile
-!wsgi.py
-!runserver.py
+

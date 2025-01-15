@@ -5,6 +5,10 @@ from typing import ClassVar
 from pydantic import BaseModel, field_validator
 
 
+class PaginationParams(BaseModel):
+    page: int
+
+
 class BasePaginatedResponse(BaseModel):
     quantity: int
     current: int

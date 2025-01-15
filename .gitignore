@@ -15,5 +15,5 @@ venv/
 
 ### OS specific ###
 .DS_Store
+
 deploy/.env
-requests.http

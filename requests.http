@@ -1,0 +1,49 @@
+@baseurl = http://127.0.0.1:8000
+
+GET {{baseurl}}/user
+Content-Type: application/json
+
+###
+POST {{baseurl}}/user
+Content-Type: application/json
+
+{
+    "username": "usde12asd3r1a2354",
+    "password": "Aq1"
+
+}
+
+###
+PATCH {{baseurl}}/user/1
+Content-Type: application/json
+
+{
+    "username": "user123"
+}
+
+###
+DELETE {{baseurl}}/user/4
+Content-Type: application/json
+
+###
+GET {{baseurl}}/advertisement/1
+Content-Type: application/json
+
+###
+POST {{baseurl}}/advertisement
+Content-Type: application/json
+
+{
+    "id_user": 1,
+    "title": "adv1",
+    "description": "sometext",
+    "price": 123
+}
+
+###
+PATCH {{baseurl}}/advertisement/1
+Content-Type: application/json
+
+{
+    "description": "newdescription"
+}

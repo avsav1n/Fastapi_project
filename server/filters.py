@@ -6,7 +6,7 @@ from sqlalchemy import Select
 from sqlalchemy.orm.attributes import InstrumentedAttribute
 from sqlalchemy.sql.elements import BinaryExpression, UnaryExpression
 
-from server.models import ORM_CLASS
+from server.models import ORM_MODEL
 
 
 class OrderingField(NamedTuple):
@@ -20,7 +20,7 @@ class Filter:
         "Advertisement": ("title", "description", "price"),
     }
 
-    def __init__(self, model: ORM_CLASS, search_by: str = None, order_by: str = None):
+    def __init__(self, model: ORM_MODEL, search_by: str = None, order_by: str = None):
         self._model = model
         self._model_columns = self._model.__table__.columns
         self._base_query: Select = sq.select(self._model)

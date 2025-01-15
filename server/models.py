@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import TypeAlias
 
 import sqlalchemy as sq
 from sqlalchemy.ext.asyncio import AsyncAttrs, async_sessionmaker, create_async_engine
@@ -72,5 +73,4 @@ async def close_orm():
     await engine.dispose()
 
 
-ORM_CLASS = User | Advertisement
-ORM_OBJECT = type[ORM_CLASS]
+ORM_MODEL: TypeAlias = User | Advertisement
