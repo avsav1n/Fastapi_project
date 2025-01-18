@@ -1,8 +1,8 @@
 import re
 from datetime import datetime
-from typing import ClassVar
+from typing import Annotated, ClassVar
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 
 class PaginationParams(BaseModel):
@@ -11,7 +11,7 @@ class PaginationParams(BaseModel):
 
 class BasePaginatedResponse(BaseModel):
     quantity: int
-    current: int
+    current_page: int
     previous: str | None
     next: str | None
 
@@ -82,3 +82,16 @@ class UpdateAdvertisementRequest(BaseAdvertisementRequest):
     title: str | None = None
     description: str | None = None
     price: int | None = None
+
+
+class QueryParams(BaseModel):
+    model_config = {"extra": "forbid"}
+
+    page: Annotated[int, Field(1, ge=1)]
+    search: Annotated[str | None, Field(None)]
+    order_by: Annotated[tuple[str], Field(["id"])]
+
+    @field_validator("order_by", mode="before")
+    @classmethod
+    def validate_order_by(cls, value: tuple[str]) -> tuple[str]:
+        return tuple("".join(value).replace(" ", "").split(","))

@@ -1,9 +1,13 @@
-from fastapi import APIRouter, Request, status
+from typing import Annotated, ClassVar
 
-from server.config import VALUES_ON_PAGE
+from fastapi import APIRouter, Depends, Query, Request, status
+from fastapi_utils.cbv import cbv
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from server.crud import Database
-from server.dependenсies import SessionDependency
-from server.models import Advertisement, User
+from server.dependenсies import get_session
+from server.filters import FilterSet
+from server.models import ORM_MODEL, Advertisement, User
 from server.pagination import Paginator
 from server.schema import (
     AdvertisementResponse,
@@ -11,6 +15,7 @@ from server.schema import (
     CreateUserRequest,
     PaginatedAdvertisementsResponse,
     PaginatedUserResponse,
+    QueryParams,
     UpdateAdvertisementRequest,
     UpdateUserRequest,
     UserResponse,
@@ -21,98 +26,107 @@ usr_router = APIRouter(prefix="/user")
 adv_router = APIRouter(prefix="/advertisement")
 
 
-@usr_router.get("", response_model=PaginatedUserResponse, status_code=status.HTTP_200_OK)
-async def get_user_list(
-    session: SessionDependency,
-    request: Request,
-    page: int = 1,
-    search: str = None,
-    order_by: str = None,
-):
-    dbase = Database(session=session, model=User)
-    users: list[dict] = [
-        user.as_dict for user in await dbase.get_list(search_by=search, order_by=order_by)
-    ]
-    paginator = Paginator(sequence=users, values_on_page=VALUES_ON_PAGE, url=str(request.url))
-    return paginator.get_page(page=page)
+class BaseView:
+    session: AsyncSession = Depends(get_session)
+
+    model: ClassVar[ORM_MODEL] = None
+    search_fields: ClassVar[tuple[str]] = None
+    filterset_class: ClassVar = FilterSet
+    pagination_class: ClassVar = Paginator
+
+    def __init__(self):
+        self.dbase = Database(session=self.session, model=self.model)
+
+    async def get_list(self, request: Request, query_params: Annotated[QueryParams, Query()]):
+        query_params: dict = query_params.model_dump()
+        filterset: FilterSet = self.filterset_class(
+            model=self.model, search_fields=self.search_fields, filter_params=query_params
+        )
+        paginator: Paginator = self.pagination_class(
+            url=str(request.url), pagination_params=query_params
+        )
+        objs: list[ORM_MODEL] = await self.dbase.get_list(filterset=filterset, paginator=paginator)
+        objs: list[dict] = [obj.as_dict for obj in objs]
+        page = paginator.get_paginated_page(values=objs)
+        return page
+
+    async def get_detail(self, id: int):
+        obj: ORM_MODEL = await self.dbase.get_detail(id=id)
+        return obj.as_dict
+
+    async def delete(self, id: int):
+        obj: ORM_MODEL = await self.dbase.get_detail(id=id)
+        await self.dbase.delete(obj=obj)
 
 
-@usr_router.get("/{id}", response_model=UserResponse, status_code=status.HTTP_200_OK)
-async def get_user_detail(session: SessionDependency, id: int):
-    dbase = Database(session=session, model=User)
-    user: User = await dbase.get_detail(id=id)
-    return user.as_dict
+@cbv(router=usr_router)
+class UserView(BaseView):
+    model = User
+    search_fields = ("username",)
 
+    @usr_router.get("/", response_model=PaginatedUserResponse, status_code=status.HTTP_200_OK)
+    async def get_list(self, request: Request, query_params: Annotated[QueryParams, Query()]):
+        return await super().get_list(request, query_params)
 
-@usr_router.post("", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
-async def create_user(session: SessionDependency, user_info: CreateUserRequest):
-    validated_data: dict = user_info.model_dump()
-    validated_data: dict = hash_password(validated_data)
-    dbase = Database(session=session, model=User)
-    created_user: User = await dbase.create(validated_data=validated_data)
-    return created_user.as_dict
+    @usr_router.get("/{id}/", response_model=UserResponse, status_code=status.HTTP_200_OK)
+    async def get_detail(self, id: int):
+        return await super().get_detail(id)
 
-
-@usr_router.patch("/{id}", response_model=UserResponse, status_code=status.HTTP_200_OK)
-async def update_user(session: SessionDependency, user_info: UpdateUserRequest, id: int):
-    validated_data: dict = user_info.model_dump(exclude_unset=True)
-    if validated_data.get("password"):
+    @usr_router.post("/", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+    async def create(self, user_info: CreateUserRequest):
+        validated_data: dict = user_info.model_dump()
         validated_data: dict = hash_password(validated_data)
-    dbase = Database(session=session, model=User)
-    user: User = await dbase.get_detail(id=id)
-    updated_user: User = await dbase.update(obj=user, validated_data=validated_data)
-    return updated_user.as_dict
+        created_user: User = await self.dbase.create(validated_data=validated_data)
+        return created_user.as_dict
+
+    @usr_router.patch("/{id}/", response_model=UserResponse, status_code=status.HTTP_200_OK)
+    async def update(self, user_info: UpdateUserRequest, id: int):
+        validated_data: dict = user_info.model_dump(exclude_unset=True)
+        if validated_data.get("password"):
+            validated_data: dict = hash_password(validated_data)
+        user: User = await self.dbase.get_detail(id=id)
+        updated_user: User = await self.dbase.update(obj=user, validated_data=validated_data)
+        return updated_user.as_dict
+
+    @usr_router.delete("/{id}/", status_code=status.HTTP_204_NO_CONTENT)
+    async def delete(self, id: int):
+        return await super().delete(id)
 
 
-@usr_router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_user(session: SessionDependency, id: int):
-    dbase = Database(session=session, model=User)
-    user: User = await dbase.get_detail(id=id)
-    await dbase.delete(obj=user)
+@cbv(router=adv_router)
+class AdvertisementView(BaseView):
+    model = Advertisement
+    search_fields = (
+        "title",
+        "description",
+        "price",
+    )
 
+    @adv_router.get(
+        "/", response_model=PaginatedAdvertisementsResponse, status_code=status.HTTP_200_OK
+    )
+    async def get_list(self, request: Request, query_params: Annotated[QueryParams, Query()]):
+        return await super().get_list(request, query_params)
 
-@adv_router.get("", response_model=PaginatedAdvertisementsResponse, status_code=status.HTTP_200_OK)
-async def get_adv_list(
-    session: SessionDependency,
-    request: Request,
-    page: int = 1,
-    search: str = None,
-    order_by: str = None,
-):
-    dbase = Database(session=session, model=Advertisement)
-    advs: list[dict] = [
-        adv.as_dict for adv in await dbase.get_list(search_by=search, order_by=order_by)
-    ]
-    paginator = Paginator(sequence=advs, values_on_page=VALUES_ON_PAGE, url=str(request.url))
-    return paginator.get_page(page=page)
+    @adv_router.get("/{id}/", response_model=AdvertisementResponse, status_code=status.HTTP_200_OK)
+    async def get_detail(self, id: int):
+        return await super().get_detail(id)
 
+    @adv_router.post("/", response_model=AdvertisementResponse, status_code=status.HTTP_201_CREATED)
+    async def create(self, adv_info: CreateAdvertisementRequest):
+        validated_data: dict = adv_info.model_dump()
+        created_adv: Advertisement = await self.dbase.create(validated_data=validated_data)
+        return created_adv.as_dict
 
-@adv_router.get("/{id}", response_model=AdvertisementResponse, status_code=status.HTTP_200_OK)
-async def get_adv_detail(session: SessionDependency, id: int):
-    dbase = Database(session=session, model=Advertisement)
-    adv: Advertisement = await dbase.get_detail(id=id)
-    return adv.as_dict
+    @adv_router.patch(
+        "/{id}/", response_model=AdvertisementResponse, status_code=status.HTTP_200_OK
+    )
+    async def update(self, adv_info: UpdateAdvertisementRequest, id: int):
+        validated_data: dict = adv_info.model_dump(exclude_unset=True)
+        adv: Advertisement = await self.dbase.get_detail(id=id)
+        updated_adv: Advertisement = await self.dbase.update(obj=adv, validated_data=validated_data)
+        return updated_adv.as_dict
 
-
-@adv_router.post("", response_model=AdvertisementResponse, status_code=status.HTTP_201_CREATED)
-async def create_adv(session: SessionDependency, adv_info: CreateAdvertisementRequest):
-    validated_data: dict = adv_info.model_dump()
-    dbase = Database(session=session, model=Advertisement)
-    created_adv: Advertisement = await dbase.create(validated_data=validated_data)
-    return created_adv.as_dict
-
-
-@adv_router.patch("/{id}", response_model=AdvertisementResponse, status_code=status.HTTP_200_OK)
-async def update_adv(session: SessionDependency, adv_info: UpdateAdvertisementRequest, id: int):
-    validated_data: dict = adv_info.model_dump(exclude_unset=True)
-    dbase = Database(session=session, model=Advertisement)
-    adv: Advertisement = await dbase.get_detail(id=id)
-    updated_adv: Advertisement = await dbase.update(obj=adv, validated_data=validated_data)
-    return updated_adv.as_dict
-
-
-@adv_router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_adv(session: SessionDependency, id: int):
-    dbase = Database(session=session, model=Advertisement)
-    user: Advertisement = await dbase.get_detail(id=id)
-    await dbase.delete(obj=user)
+    @adv_router.delete("/{id}/", status_code=status.HTTP_204_NO_CONTENT)
+    async def delete(self, id: int):
+        return await super().delete(id)

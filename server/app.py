@@ -4,7 +4,7 @@ from server.lifespan import lifespan
 from server.views import adv_router, usr_router
 
 
-def get_app():
+def get_app() -> FastAPI:
     app = FastAPI(
         description="API service of advertisements for sale/purchase",
         version="1.0",
