@@ -1,11 +1,15 @@
+from datetime import datetime, timedelta
+from uuid import UUID
+
 import sqlalchemy as sq
 from fastapi import HTTPException
 from sqlalchemy import Select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from server.config import TOKEN_TTL_HOURS
 from server.filters import FilterSet
-from server.models import ORM_MODEL
+from server.models import ORM_MODEL, Token, User
 from server.pagination import Paginator
 
 
@@ -86,3 +90,28 @@ class Database:
         await self._session.delete(instance=obj)
         await self._save_changes()
         return obj
+
+
+async def get_user_by_username(session: AsyncSession, username: str) -> User:
+    """Метод получения объекта User по уникальному имени пользователя
+
+    :param AsyncSession session: объект асинхронной сессии
+    :param str username: уникальное имя пользователя
+    :raises HTTPException: ошибка, вызываемая при отсутствии записи в базе данных
+    :return User: полученный объект User
+    """
+    query = sq.select(User).where(User.username == username)
+    user: User = await session.scalar(query)
+    if user:
+        return user
+    raise HTTPException(400, f"User with {username=} not found")
+
+
+async def validate_token(session: AsyncSession, token: UUID) -> Token:
+    query: Select = sq.select(Token).where(
+        Token.token == token, Token.created_at >= datetime.now() - timedelta(hours=TOKEN_TTL_HOURS)
+    )
+    token: Token | None = await session.scalar(query)
+    if token:
+        return token
+    raise HTTPException(401, "The provided authorization token is invalid")

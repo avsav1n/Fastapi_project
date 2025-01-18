@@ -1,5 +1,6 @@
 from datetime import datetime
 from typing import TypeAlias
+from uuid import UUID
 
 import sqlalchemy as sq
 from sqlalchemy.ext.asyncio import AsyncAttrs, async_sessionmaker, create_async_engine
@@ -31,6 +32,9 @@ class User(Base):
     advertisements: Mapped[list["Advertisement"]] = relationship(
         "Advertisement", back_populates="author", cascade="all, delete-orphan"
     )
+    tokens: Mapped[list["Token"]] = relationship(
+        "Token", back_populates="user", cascade="all, delete-orphan"
+    )
 
     @property
     def as_dict(self):
@@ -38,6 +42,25 @@ class User(Base):
             "id": self.id,
             "username": self.username,
             "registered_at": self.registered_at.isoformat(),
+        }
+
+
+class Token(Base):
+    __tablename__ = "Token"
+    id: Mapped[int] = mapped_column(sq.Integer, primary_key=True)
+    id_user: Mapped[int] = mapped_column(sq.Integer, sq.ForeignKey(User.id, ondelete="CASCADE"))
+    token: Mapped[UUID] = mapped_column(
+        sq.UUID, server_default=sq.func.gen_random_uuid(), unique=True
+    )
+    created_at: Mapped[datetime] = mapped_column(sq.DateTime, server_default=sq.func.now())
+
+    user: Mapped["User"] = relationship("User", back_populates="tokens")
+
+    @property
+    def as_dict(self):
+        return {
+            "token": self.token,
+            "created_at": self.created_at.isoformat(),
         }
 
 
@@ -73,4 +96,4 @@ async def close_orm():
     await engine.dispose()
 
 
-ORM_MODEL: TypeAlias = User | Advertisement
+ORM_MODEL: TypeAlias = User | Advertisement | Token

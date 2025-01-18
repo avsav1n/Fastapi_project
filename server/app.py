@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 
 from server.lifespan import lifespan
-from server.views import adv_router, usr_router
+from server.views import adv_router, auth_router, usr_router
 
 
 def get_app() -> FastAPI:
@@ -12,6 +12,7 @@ def get_app() -> FastAPI:
     )
     app.include_router(usr_router)
     app.include_router(adv_router)
+    app.include_router(auth_router)
     return app
 
 

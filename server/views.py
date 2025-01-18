@@ -1,33 +1,37 @@
 from typing import Annotated, ClassVar
 
-from fastapi import APIRouter, Depends, Query, Request, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 from fastapi_utils.cbv import cbv
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from server.crud import Database
-from server.dependenсies import get_session
+from server.auth import check_password, hash_password
+from server.crud import Database, get_user_by_username
+from server.dependenсies import SessionDependency, get_session, get_token
 from server.filters import FilterSet
-from server.models import ORM_MODEL, Advertisement, User
+from server.models import ORM_MODEL, Advertisement, Token, User
 from server.pagination import Paginator
 from server.schema import (
     AdvertisementResponse,
+    AuthParams,
     CreateAdvertisementRequest,
     CreateUserRequest,
     PaginatedAdvertisementsResponse,
     PaginatedUserResponse,
     QueryParams,
+    TokenResponse,
     UpdateAdvertisementRequest,
     UpdateUserRequest,
     UserResponse,
 )
-from server.security import hash_password
 
 usr_router = APIRouter(prefix="/user")
 adv_router = APIRouter(prefix="/advertisement")
+auth_router = APIRouter(prefix="/login")
 
 
 class BaseView:
     session: AsyncSession = Depends(get_session)
+    token: Token = Depends(get_token)
 
     model: ClassVar[ORM_MODEL] = None
     search_fields: ClassVar[tuple[str]] = None
@@ -37,7 +41,7 @@ class BaseView:
     def __init__(self):
         self.dbase = Database(session=self.session, model=self.model)
 
-    async def get_list(self, request: Request, query_params: Annotated[QueryParams, Query()]):
+    async def get_list(self, request: Request, query_params: QueryParams):
         query_params: dict = query_params.model_dump()
         filterset: FilterSet = self.filterset_class(
             model=self.model, search_fields=self.search_fields, filter_params=query_params
@@ -115,6 +119,7 @@ class AdvertisementView(BaseView):
     @adv_router.post("/", response_model=AdvertisementResponse, status_code=status.HTTP_201_CREATED)
     async def create(self, adv_info: CreateAdvertisementRequest):
         validated_data: dict = adv_info.model_dump()
+        validated_data["id_user"] = self.token.id_user
         created_adv: Advertisement = await self.dbase.create(validated_data=validated_data)
         return created_adv.as_dict
 
@@ -130,3 +135,15 @@ class AdvertisementView(BaseView):
     @adv_router.delete("/{id}/", status_code=status.HTTP_204_NO_CONTENT)
     async def delete(self, id: int):
         return await super().delete(id)
+
+
+@auth_router.post("", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
+async def login(session: SessionDependency, auth: Annotated[AuthParams, Header()]):
+    if not all([auth.username, auth.password]):
+        raise HTTPException(401, "Basic authorization credentials were not provided")
+    user: User = await get_user_by_username(session=session, username=auth.username)
+    if not check_password(auth.password, user.password):
+        raise HTTPException(401, "The provided password is invalid")
+    dbase: Database = Database(session=session, model=Token)
+    token: Token = await dbase.create(validated_data={"user": user})
+    return token.as_dict

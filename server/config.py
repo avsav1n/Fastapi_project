@@ -8,4 +8,7 @@ POSTGRES_HOST = os.getenv("POSTGRES_HOST", "localhost")
 POSTGRES_PORT = os.getenv("POSTGRES_PORT", "5432")
 
 # Параметры пагинации
-VALUES_ON_PAGE = 5
+VALUES_ON_PAGE = int(os.getenv("VALUES_ON_PAGE", 5))
+
+# Параметры аутентификации
+TOKEN_TTL_HOURS = int(os.getenv("TOKEN_TTL_HOURS", 48))

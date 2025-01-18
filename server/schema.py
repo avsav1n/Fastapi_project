@@ -1,8 +1,11 @@
 import re
+from base64 import b64decode
 from datetime import datetime
-from typing import Annotated, ClassVar
+from re import Match
+from typing import Annotated, ClassVar, Self
+from uuid import UUID
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class PaginationParams(BaseModel):
@@ -32,10 +35,11 @@ class BaseUserRequest(BaseModel):
 
     password_pattern: ClassVar = re.compile(r"^(?=.*\d)(?=.*[a-z])(?=.*[A-Z])(?!.*\s).*$")
 
-    @field_validator("password")
+    @field_validator("password", mode="before")
     @classmethod
     def validate_password(cls, value: str) -> str:
-        result = cls.password_pattern.fullmatch(value)
+        pattern: str = r"^(?=.*\d)(?=.*[a-z])(?=.*[A-Z])(?!.*\s).*$"
+        result: Match = re.fullmatch(pattern=pattern, string=value)
         if result:
             return value
         raise ValueError(
@@ -67,7 +71,6 @@ class PaginatedAdvertisementsResponse(BasePaginatedResponse):
 
 
 class BaseAdvertisementRequest(BaseModel):
-    id_user: int
     title: str
     description: str
     price: int
@@ -93,5 +96,29 @@ class QueryParams(BaseModel):
 
     @field_validator("order_by", mode="before")
     @classmethod
-    def validate_order_by(cls, value: tuple[str]) -> tuple[str]:
+    def convert_order_by(cls, value: tuple[str]) -> tuple[str]:
         return tuple("".join(value).replace(" ", "").split(","))
+
+
+class AuthParams(BaseModel):
+    authorization: str
+    username: str | None = None
+    password: str | None = None
+    token: UUID | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def convert_auth_data(cls, data: dict[str, str]) -> dict:
+        type, auth_data = data["authorization"].split(maxsplit=1)
+        match type:
+            case "Basic":
+                decoded_data: str = b64decode(auth_data, validate=True).decode()
+                data["username"], data["password"] = decoded_data.replace(":", " ").split()
+            case "Token":
+                data["token"] = auth_data
+        return data
+
+
+class TokenResponse(BaseModel):
+    token: UUID
+    created_at: datetime
