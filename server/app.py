@@ -5,6 +5,10 @@ from server.views import adv_router, auth_router, usr_router
 
 
 def get_app() -> FastAPI:
+    """Функция инициализация приложения FastAPI
+
+    :return FastAPI: объект приложения FastAPI
+    """
     app = FastAPI(
         description="API service of advertisements for sale/purchase",
         version="1.0",

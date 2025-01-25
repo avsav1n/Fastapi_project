@@ -4,7 +4,7 @@ from uuid import UUID
 import sqlalchemy as sq
 from fastapi import HTTPException
 from sqlalchemy import Select
-from sqlalchemy.exc import DBAPIError, IntegrityError
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from server.config import TOKEN_TTL_HOURS
@@ -14,11 +14,18 @@ from server.pagination import Paginator
 
 
 class Database:
+    """Класс для выполнения CRUD-запросов к базе данных"""
+
     def __init__(self, session: AsyncSession, model: ORM_MODEL):
         self._session = session
         self._model = model
 
     async def _save_changes(self, obj: ORM_MODEL = None) -> None:
+        """Метод сохранения фиксирования изменений в базе данных
+
+        :param ORM_MODEL obj: объект ORM-модели для сохранения, defaults to None
+        :raises HTTPException: ошибка, вызываемая при возникновения конфликтов уникальных полей
+        """
         if obj:
             self._session.add(instance=obj)
         try:
@@ -27,6 +34,11 @@ class Database:
             raise HTTPException(409, f"{self._model.__tablename__} already exists")
 
     async def _calculate_quantity(self, query: Select) -> int:
+        """Метод посчета количества записей
+
+        :param Select query: объект запроса, количество записей которого нужно подсчитать
+        :return int: количество записей
+        """
         query: Select = sq.select(sq.func.count()).select_from(query.subquery())
         return await self._session.scalar(query)
 
@@ -47,7 +59,7 @@ class Database:
         return await self._session.scalars(query)
 
     async def get_detail(self, id: int) -> ORM_MODEL:
-        """Метод получения записи
+        """Метод получения одной записи
 
         :param int id: идентификатор записи
         :raises HTTPException: ошибка, вызываемая при отсутствии записи в базе данных
@@ -93,7 +105,7 @@ class Database:
 
 
 async def get_user_by_username(session: AsyncSession, username: str) -> User:
-    """Метод получения объекта User по уникальному имени пользователя
+    """Функция получения объекта User по уникальному имени пользователя
 
     :param AsyncSession session: объект асинхронной сессии
     :param str username: уникальное имя пользователя
@@ -108,8 +120,16 @@ async def get_user_by_username(session: AsyncSession, username: str) -> User:
 
 
 async def validate_token(session: AsyncSession, token: UUID) -> Token:
+    """Функция валидации токена
+
+    :param AsyncSession session: объект асинхронной сессии
+    :param UUID token: токен для валидации
+    :raises HTTPException: ошибка, вызываемая при ошибке валидации
+    :return Token: валидный токен
+    """
     query: Select = sq.select(Token).where(
-        Token.token == token, Token.created_at >= datetime.now() - timedelta(hours=TOKEN_TTL_HOURS)
+        Token.token == token,
+        Token.created_at >= datetime.now() - timedelta(hours=TOKEN_TTL_HOURS),
     )
     token: Token | None = await session.scalar(query)
     if token:

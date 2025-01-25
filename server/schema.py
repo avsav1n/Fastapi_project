@@ -2,7 +2,7 @@ import re
 from base64 import b64decode
 from datetime import datetime
 from re import Match
-from typing import Annotated, ClassVar, Self
+from typing import Annotated, ClassVar
 from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -22,6 +22,7 @@ class BasePaginatedResponse(BaseModel):
 class UserResponse(BaseModel):
     id: int
     username: str
+    role: str
     registered_at: datetime
 
 
@@ -101,7 +102,7 @@ class QueryParams(BaseModel):
 
 
 class AuthParams(BaseModel):
-    authorization: str
+    authorization: str | None = None
     username: str | None = None
     password: str | None = None
     token: UUID | None = None
@@ -109,13 +110,14 @@ class AuthParams(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def convert_auth_data(cls, data: dict[str, str]) -> dict:
-        type, auth_data = data["authorization"].split(maxsplit=1)
-        match type:
-            case "Basic":
-                decoded_data: str = b64decode(auth_data, validate=True).decode()
-                data["username"], data["password"] = decoded_data.replace(":", " ").split()
-            case "Token":
-                data["token"] = auth_data
+        if data.get("authorization"):
+            type, auth_data = data["authorization"].split(maxsplit=1)
+            match type:
+                case "Basic":
+                    decoded_data: str = b64decode(auth_data, validate=True).decode()
+                    data["username"], data["password"] = decoded_data.replace(":", " ").split()
+                case "Token":
+                    data["token"] = auth_data
         return data
 
 

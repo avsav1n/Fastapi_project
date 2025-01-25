@@ -1,49 +1,67 @@
 @baseurl = http://127.0.0.1:8000
+@token = 
+@inv_token = 2405bf8f-e854-4c1e-a31f-5b4d3f46c5c1
 
-GET {{baseurl}}/user
+GET {{baseurl}}/user/
 Content-Type: application/json
+# Authorization: Token {{token}}
 
 ###
-POST {{baseurl}}/user
+POST {{baseurl}}/user/
 Content-Type: application/json
+# Authorization: Token {{token}}
 
 {
-    "username": "usde12asd3r1a2354",
+    "username": "GORDEY",
     "password": "Aq1"
-
 }
 
 ###
-PATCH {{baseurl}}/user/1
+PATCH {{baseurl}}/user/18/
 Content-Type: application/json
+Authorization: Token {{token}}
 
 {
-    "username": "user123"
+    "username": "GORDEYGYM"
 }
 
 ###
-DELETE {{baseurl}}/user/4
+DELETE {{baseurl}}/user/22/
+Content-Type: application/json
+Authorization: Token {{token}}
+
+
+###
+GET {{baseurl}}/advertisement/?search=3143
 Content-Type: application/json
 
 ###
-GET {{baseurl}}/advertisement/1
+POST {{baseurl}}/advertisement/
 Content-Type: application/json
-
-###
-POST {{baseurl}}/advertisement
-Content-Type: application/json
+Authorization: Token {{token}}
 
 {
-    "id_user": 1,
-    "title": "adv1",
+    "title": "ad2v1",
     "description": "sometext",
     "price": 123
 }
 
 ###
-PATCH {{baseurl}}/advertisement/1
+PATCH {{baseurl}}/advertisement/4/
 Content-Type: application/json
+Authorization: Token {{token}}
 
 {
     "description": "newdescription"
 }
+
+###
+DELETE {{baseurl}}/advertisement/3/
+
+###
+POST {{baseurl}}/login/
+Authorization: Basic GORDEYGYM:Aq1
+
+###
+GET {{baseurl}}/user/auth
+Authorization: Token {{token}}

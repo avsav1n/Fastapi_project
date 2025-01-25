@@ -1,0 +1,52 @@
+name: ci
+
+on:
+  push:
+      branches: ['main']
+
+jobs:
+  integration:
+    runs-on: ubuntu-22.04
+    env: 
+      POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+      POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+      POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: ${{ env.POSTGRES_DB }}
+          POSTGRES_USER: ${{ env.POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ env.POSTGRES_PASSWORD }}
+        ports:
+          - 5432:5432
+        options:
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: check changes
+        uses: actions/checkout@v4
+
+      - name: setup python
+        uses: actions/setup-python@v5
+        with: 
+          python-version: '3.12'
+
+      - name: requirements setup
+        run: pip install -r requirements-dev.txt
+
+      - name: linting
+        run: flake8 --max-line-length=100 server/
+
+      - name: apply migrations
+        run: alembic upgrade head
+        
+      - name: testing
+        run: pytest
+        env:
+          POSTGRES_DB: ${{ env.POSTGRES_DB }}
+          POSTGRES_USER: ${{ env.POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ env.POSTGRES_PASSWORD }}
